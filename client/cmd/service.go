@@ -107,7 +107,7 @@ func newProgram(ctx context.Context, cancel context.CancelFunc) *program {
 func newSVCConfig() (*service.Config, error) {
 	config := &service.Config{
 		Name:        serviceName,
-		DisplayName: "Netbird",
+		DisplayName: serviceDisplayName(serviceName),
 		Description: "NetBird mesh network client",
 		Option:      make(service.KeyValue),
 		EnvVars:     make(map[string]string),
