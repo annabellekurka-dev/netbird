@@ -139,6 +139,10 @@ var installCmd = &cobra.Command{
 			cmd.PrintErrf("Warning: failed to load saved service params: %v\n", err)
 		}
 
+		if err := checkInstanceInstallConflicts(); err != nil {
+			return err
+		}
+
 		svcConfig, err := createServiceConfigForInstall()
 		if err != nil {
 			return err
@@ -213,6 +217,10 @@ This command will temporarily stop the service, update its configuration, and re
 
 		if err := loadAndApplyServiceParams(cmd); err != nil {
 			cmd.PrintErrf("Warning: failed to load saved service params: %v\n", err)
+		}
+
+		if err := checkInstanceInstallConflicts(); err != nil {
+			return err
 		}
 
 		wasRunning, err := isServiceRunning()
