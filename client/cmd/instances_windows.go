@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"os/exec"
 	"sort"
 	"strings"
@@ -177,6 +178,15 @@ func (r instanceReport) warnings() []string {
 		}
 	}
 
+	for i, a := range r.adapters {
+		for _, b := range r.adapters[i+1:] {
+			if a.up && b.up && networksOverlap(a.addrs, b.addrs) {
+				w = append(w, fmt.Sprintf("the networks of interfaces %s and %s overlap: the two NetBird networks "+
+					"cannot both be reached reliably", a.name, b.name))
+			}
+		}
+	}
+
 	live := make([]dns.NRPTInstance, 0, len(r.nrpt))
 	for _, n := range r.nrpt {
 		if n.Live {
@@ -190,6 +200,23 @@ func (r instanceReport) warnings() []string {
 	}
 
 	return w
+}
+
+// networksOverlap reports whether any address network of a overlaps one of b.
+// Addresses that are not in CIDR form are ignored.
+func networksOverlap(a, b []string) bool {
+	for _, x := range a {
+		px, err := netip.ParsePrefix(x)
+		if err != nil {
+			continue
+		}
+		for _, y := range b {
+			if py, err := netip.ParsePrefix(y); err == nil && px.Masked().Overlaps(py.Masked()) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func overlapWarnings(a, b dns.NRPTInstance) []string {

@@ -59,6 +59,26 @@ func TestInstanceReportWarnings(t *testing.T) {
 		assert.Empty(t, r.warnings())
 	})
 
+	t.Run("overlapping networks", func(t *testing.T) {
+		r := healthy
+		r.adapters = []adapterInfo{
+			{name: "wt0", up: true, addrs: []string{"100.64.1.5/16", "fe80::1/64"}},
+			{name: "wt1", up: true, addrs: []string{"100.64.200.9/16"}},
+		}
+		w := r.warnings()
+		assert.Len(t, w, 1)
+		assert.Contains(t, w[0], "networks of interfaces wt0 and wt1 overlap")
+	})
+
+	t.Run("distinct networks", func(t *testing.T) {
+		r := healthy
+		r.adapters = []adapterInfo{
+			{name: "wt0", up: true, addrs: []string{"100.64.1.5/16"}},
+			{name: "wt1", up: true, addrs: []string{"100.65.1.5/16"}},
+		}
+		assert.Empty(t, r.warnings())
+	})
+
 	t.Run("overlapping domains", func(t *testing.T) {
 		r := healthy
 		r.nrpt = []dns.NRPTInstance{

@@ -122,6 +122,8 @@ func (t *TunDevice) Create() (WGConfigurer, error) {
 		return nil, fmt.Errorf("error configuring interface: %s", err)
 	}
 
+	warnOverlappingNetworks(t.name, t.address.Prefix())
+
 	if g := instanceGUIDString(t.name); g != "" {
 		log.Infof("interface %s uses adapter GUID %s", t.name, g)
 		go ensurePrivateNetwork(t.name)
