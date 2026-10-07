@@ -27,6 +27,7 @@ const (
 // $evt = [System.Threading.EventWaitHandle]::OpenExisting("Global\NetbirdDebugTriggerEvent")
 // $evt.Set()
 // $evt.Close()
+// An instance on a non-default interface listens on "Global\NetbirdDebugTriggerEvent_<interface>".
 func SetupDebugHandler(
 	ctx context.Context,
 	config *profilemanager.Config,
@@ -48,9 +49,11 @@ func SetupDebugHandler(
 		return
 	}
 
-	eventNamePtr, err := windows.UTF16PtrFromString(debugTriggerEventName)
+	eventName := debugTriggerEventNameFor(config.WgIface)
+
+	eventNamePtr, err := windows.UTF16PtrFromString(eventName)
 	if err != nil {
-		log.Errorf("Failed to convert event name '%s' to UTF16: %v", debugTriggerEventName, err)
+		log.Errorf("Failed to convert event name '%s' to UTF16: %v", eventName, err)
 		return
 	}
 
@@ -58,28 +61,28 @@ func SetupDebugHandler(
 	eventHandle, err := windows.CreateEvent(nil, 1, 0, eventNamePtr)
 	if err != nil {
 		if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-			log.Warnf("Debug trigger event '%s' already exists. Attempting to open.", debugTriggerEventName)
+			log.Warnf("Debug trigger event '%s' already exists. Attempting to open.", eventName)
 			// SYNCHRONIZE is needed for WaitForSingleObject, EVENT_MODIFY_STATE for ResetEvent.
 			eventHandle, err = windows.OpenEvent(windows.SYNCHRONIZE|windows.EVENT_MODIFY_STATE, false, eventNamePtr)
 			if err != nil {
-				log.Errorf("Failed to open existing debug trigger event '%s': %v", debugTriggerEventName, err)
+				log.Errorf("Failed to open existing debug trigger event '%s': %v", eventName, err)
 				return
 			}
-			log.Infof("Successfully opened existing debug trigger event '%s'.", debugTriggerEventName)
+			log.Infof("Successfully opened existing debug trigger event '%s'.", eventName)
 		} else {
-			log.Errorf("Failed to create debug trigger event '%s': %v", debugTriggerEventName, err)
+			log.Errorf("Failed to create debug trigger event '%s': %v", eventName, err)
 			return
 		}
 	}
 
 	if eventHandle == windows.InvalidHandle {
-		log.Errorf("Obtained an invalid handle for debug trigger event '%s'", debugTriggerEventName)
+		log.Errorf("Obtained an invalid handle for debug trigger event '%s'", eventName)
 		return
 	}
 
-	log.Infof("Debug handler waiting for signal on event: %s", debugTriggerEventName)
+	log.Infof("Debug handler waiting for signal on event: %s", eventName)
 
-	go waitForEvent(ctx, config, recorder, connectClient, logFilePath, eventHandle)
+	go waitForEvent(ctx, config, recorder, connectClient, logFilePath, eventHandle, eventName)
 }
 
 func waitForEvent(
@@ -89,10 +92,11 @@ func waitForEvent(
 	connectClient *internal.ConnectClient,
 	logFilePath string,
 	eventHandle windows.Handle,
+	eventName string,
 ) {
 	defer func() {
 		if err := windows.CloseHandle(eventHandle); err != nil {
-			log.Errorf("Failed to close debug event handle '%s': %v", debugTriggerEventName, err)
+			log.Errorf("Failed to close debug event handle '%s': %v", eventName, err)
 		}
 	}()
 
@@ -109,14 +113,14 @@ func waitForEvent(
 
 			// reset the event so it can be triggered again later (manual reset == 1)
 			if err := windows.ResetEvent(eventHandle); err != nil {
-				log.Errorf("Failed to reset debug event '%s': %v", debugTriggerEventName, err)
+				log.Errorf("Failed to reset debug event '%s': %v", eventName, err)
 			}
 
 			go generateDebugBundle(config, recorder, connectClient, logFilePath)
 		case uint32(windows.WAIT_TIMEOUT):
 
 		default:
-			log.Errorf("Unexpected status %d from WaitForSingleObject for debug event '%s': %v", status, debugTriggerEventName, err)
+			log.Errorf("Unexpected status %d from WaitForSingleObject for debug event '%s': %v", status, eventName, err)
 			select {
 			case <-time.After(5 * time.Second):
 			case <-ctx.Done():
