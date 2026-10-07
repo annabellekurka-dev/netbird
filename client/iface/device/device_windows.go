@@ -61,6 +61,9 @@ func (t *TunDevice) Create() (WGConfigurer, error) {
 		log.Errorf("failed to get GUID: %s", err)
 		return nil, err
 	}
+	if err := claimInterface(t.name); err != nil {
+		return nil, err
+	}
 	log.Info("create tun interface")
 	tunDevice, err := tun.CreateTUNWithRequestedGUID(t.name, &guid, int(t.mtu))
 	if err != nil {
@@ -150,6 +153,8 @@ func (t *TunDevice) Close() error {
 		t.device.Close()
 		t.device = nil
 	}
+
+	releaseInterface(t.name)
 
 	if t.udpMux != nil {
 		return t.udpMux.Close()
