@@ -38,8 +38,10 @@ func (a *WindowsInterfaceAllower) Apply() error {
 		return nil
 	}
 
-	if !isFirewallRuleActive(firewallRuleName) {
-		if err := manageFirewallRule(firewallRuleName,
+	ruleName := firewallRuleNameFor(a.iface.Name())
+
+	if !isFirewallRuleActive(ruleName) {
+		if err := manageFirewallRule(ruleName,
 			addRule,
 			"dir=in",
 			"enable=yes",
@@ -51,8 +53,8 @@ func (a *WindowsInterfaceAllower) Apply() error {
 		}
 	}
 
-	if v6 := a.iface.Address().IPv6; v6.IsValid() && !isFirewallRuleActive(firewallRuleName+"-v6") {
-		if err := manageFirewallRule(firewallRuleName+"-v6",
+	if v6 := a.iface.Address().IPv6; v6.IsValid() && !isFirewallRuleActive(ruleName+"-v6") {
+		if err := manageFirewallRule(ruleName+"-v6",
 			addRule,
 			"dir=in",
 			"enable=yes",
@@ -73,14 +75,16 @@ func (a *WindowsInterfaceAllower) Close() error {
 		return nil
 	}
 
+	ruleName := firewallRuleNameFor(a.iface.Name())
+
 	var merr *multierror.Error
-	if isFirewallRuleActive(firewallRuleName) {
-		if err := manageFirewallRule(firewallRuleName, deleteRule); err != nil {
+	if isFirewallRuleActive(ruleName) {
+		if err := manageFirewallRule(ruleName, deleteRule); err != nil {
 			merr = multierror.Append(merr, fmt.Errorf("remove windows firewall rule: %w", err))
 		}
 	}
-	if isFirewallRuleActive(firewallRuleName + "-v6") {
-		if err := manageFirewallRule(firewallRuleName+"-v6", deleteRule); err != nil {
+	if isFirewallRuleActive(ruleName + "-v6") {
+		if err := manageFirewallRule(ruleName+"-v6", deleteRule); err != nil {
 			merr = multierror.Append(merr, fmt.Errorf("remove windows v6 firewall rule: %w", err))
 		}
 	}
