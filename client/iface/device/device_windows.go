@@ -121,6 +121,11 @@ func (t *TunDevice) Create() (WGConfigurer, error) {
 		t.configurer.Close()
 		return nil, fmt.Errorf("error configuring interface: %s", err)
 	}
+
+	if g := instanceGUIDString(t.name); g != "" {
+		log.Infof("interface %s uses adapter GUID %s", t.name, g)
+		go ensurePrivateNetwork(t.name)
+	}
 	return t.configurer, nil
 }
 
