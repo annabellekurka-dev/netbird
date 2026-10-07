@@ -45,16 +45,18 @@ func NewTunDevice(name string, address wgaddr.Address, port int, key string, mtu
 	}
 }
 
-func getGUID() (windows.GUID, error) {
+func getGUID(ifaceName string) (windows.GUID, error) {
 	guidString := defaultWindowsGUIDSTring
 	if CustomWindowsGUIDString != "" {
 		guidString = CustomWindowsGUIDString
+	} else if g := instanceGUIDString(ifaceName); g != "" {
+		guidString = g
 	}
 	return windows.GUIDFromString(guidString)
 }
 
 func (t *TunDevice) Create() (WGConfigurer, error) {
-	guid, err := getGUID()
+	guid, err := getGUID(t.name)
 	if err != nil {
 		log.Errorf("failed to get GUID: %s", err)
 		return nil, err
