@@ -328,6 +328,10 @@ func (r *registryConfigurator) disableWINSForInterface() error {
 }
 
 func (r *registryConfigurator) applyDNSConfig(config HostDNSConfig, stateManager *statemanager.Manager) error {
+	if err := r.checkInstanceConflicts(config); err != nil {
+		return err
+	}
+
 	// Clear every rule the previous apply installed before installing any new
 	// one, including a leftover catch-all: removal is unconditional so a rule
 	// from an earlier run cannot survive into a config that no longer wants it.
