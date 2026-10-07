@@ -3,6 +3,7 @@ package dns
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -72,11 +73,24 @@ func (r *registryConfigurator) checkInstanceConflicts(config HostDNSConfig) erro
 	return err
 }
 
-// foreignInstances reads the rules of the other instances from the registry,
-// the only place they are all recorded. A rule counts only while the interface
-// of its owner is up, so keys a crashed instance left behind are ignored.
-func (r *registryConfigurator) foreignInstances() []foreignInstance {
-	byIface := map[string]*foreignInstance{}
+// NRPTInstance is a NetBird instance that has NRPT rules installed.
+type NRPTInstance struct {
+	Interface  string
+	Namespaces []string
+	// Live is false when the instance's interface is down, which means the rules
+	// are leftovers of a crashed instance.
+	Live bool
+}
+
+// NamespacesOverlap reports whether two NRPT namespaces are equal or nested.
+func NamespacesOverlap(a, b string) bool {
+	return overlaps(a, b)
+}
+
+// ListNRPTInstances reads the rules of every NetBird instance from the registry,
+// the only place they are all recorded, ordered by interface name.
+func ListNRPTInstances() []NRPTInstance {
+	byIface := map[string]*NRPTInstance{}
 
 	for _, root := range []string{DNSPolicyConfigRoot, GPODNSPolicyConfigRoot} {
 		k, err := registry.OpenKey(registry.LOCAL_MACHINE, root, registry.ENUMERATE_SUB_KEYS)
@@ -91,7 +105,7 @@ func (r *registryConfigurator) foreignInstances() []foreignInstance {
 
 		for _, name := range names {
 			iface, ok := ruleOwnerInterface(name)
-			if !ok || strings.HasPrefix(strings.ToLower(name), strings.ToLower(r.nrptPrefix())) || !interfaceIsUp(iface) {
+			if !ok {
 				continue
 			}
 
@@ -107,16 +121,33 @@ func (r *registryConfigurator) foreignInstances() []foreignInstance {
 
 			inst := byIface[iface]
 			if inst == nil {
-				inst = &foreignInstance{iface: iface}
+				inst = &NRPTInstance{Interface: iface, Live: interfaceIsUp(iface)}
 				byIface[iface] = inst
 			}
-			inst.namespaces = append(inst.namespaces, namespaces...)
+			inst.Namespaces = append(inst.Namespaces, namespaces...)
 		}
 	}
 
-	others := make([]foreignInstance, 0, len(byIface))
+	instances := make([]NRPTInstance, 0, len(byIface))
 	for _, inst := range byIface {
-		others = append(others, *inst)
+		instances = append(instances, *inst)
+	}
+	sort.Slice(instances, func(i, j int) bool { return instances[i].Interface < instances[j].Interface })
+	return instances
+}
+
+// foreignInstances returns the other instances whose rules count. A rule counts
+// only while the interface of its owner is up, so keys a crashed instance left
+// behind are ignored.
+func (r *registryConfigurator) foreignInstances() []foreignInstance {
+	own, _ := ruleOwnerInterface(r.nrptPrefix() + "Match")
+
+	var others []foreignInstance
+	for _, inst := range ListNRPTInstances() {
+		if !inst.Live || strings.EqualFold(inst.Interface, own) {
+			continue
+		}
+		others = append(others, foreignInstance{iface: inst.Interface, namespaces: inst.Namespaces})
 	}
 	return others
 }
