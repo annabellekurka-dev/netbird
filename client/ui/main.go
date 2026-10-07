@@ -298,7 +298,7 @@ func newApplication(onSecondInstance func()) *application.App {
 			DisableQuitOnLastWindowClosed: true,
 		},
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "io.netbird.ui",
+			UniqueID: uniqueID(flagInstanceSuffix()),
 			OnSecondInstanceLaunch: func(_ application.SecondInstanceData) {
 				onSecondInstance()
 			},
