@@ -2544,7 +2544,17 @@ func (s *Server) checkProfilesDisabled() bool {
 			return v
 		}
 	}
-	return s.profilesDisabled
+	return s.profilesDisabled || s.otherInstanceUp()
+}
+
+// otherInstanceUp reports whether another NetBird connection is up on the host.
+// Profile switching is off then, so one instance cannot be pointed at the
+// network of another.
+func (s *Server) otherInstanceUp() bool {
+	if s.config == nil || s.config.WgIface == "" {
+		return false
+	}
+	return otherInstanceActive(s.config.WgIface)
 }
 
 // checkNetworksDisabled reports whether the networks/exit-node feature
