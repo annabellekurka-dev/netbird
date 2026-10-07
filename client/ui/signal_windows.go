@@ -22,7 +22,9 @@ const (
 
 // listenForShowSignal shows the main window when an external process pulses the named event.
 func listenForShowSignal(ctx context.Context, tray *Tray) {
-	namePtr, err := windows.UTF16PtrFromString(quickActionsTriggerEventName)
+	eventName := quickActionsEventName(flagInstanceSuffix())
+
+	namePtr, err := windows.UTF16PtrFromString(eventName)
 	if err != nil {
 		log.Errorf("trigger event name: %v", err)
 		return
@@ -31,18 +33,18 @@ func listenForShowSignal(ctx context.Context, tray *Tray) {
 	handle, err := windows.CreateEvent(nil, 1, 0, namePtr)
 	if err != nil {
 		if !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-			log.Errorf("create trigger event %q: %v", quickActionsTriggerEventName, err)
+			log.Errorf("create trigger event %q: %v", eventName, err)
 			return
 		}
 		handle, err = windows.OpenEvent(desiredAccesses, false, namePtr)
 		if err != nil {
-			log.Errorf("open trigger event %q: %v", quickActionsTriggerEventName, err)
+			log.Errorf("open trigger event %q: %v", eventName, err)
 			return
 		}
 	}
 
 	if handle == windows.InvalidHandle {
-		log.Errorf("invalid handle for trigger event %q", quickActionsTriggerEventName)
+		log.Errorf("invalid handle for trigger event %q", eventName)
 		return
 	}
 
