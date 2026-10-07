@@ -37,9 +37,18 @@ func sameDir(a, b string) bool {
 // self is the service about to be installed, envStateDir the NB_STATE_DIR it
 // will run with, defaultStateDir the folder of the default instance, and others
 // the services already installed.
-func checkInstanceInstall(self instanceInfo, envStateDir, defaultStateDir string, others []instanceInfo) error {
+func checkInstanceInstall(self instanceInfo, envStateDir, defaultStateDir string, others []instanceInfo, logFiles []string, defaultLogFile string) error {
 	if strings.EqualFold(self.name, defaultServiceNameFold) {
 		return nil
+	}
+
+	// The default log file lives in the default state directory whatever
+	// NB_STATE_DIR says, so two daemons would write to the same file.
+	for _, f := range logFiles {
+		if strings.EqualFold(filepath.Clean(f), filepath.Clean(defaultLogFile)) {
+			return fmt.Errorf("service %q would write to the default log file %s, which the default instance uses: "+
+				"pass --log-file <a file in its own state directory>", self.name, defaultLogFile)
+		}
 	}
 
 	if sameDir(self.stateDir, defaultStateDir) {
@@ -89,5 +98,5 @@ func checkInstanceInstallConflicts() error {
 	self := instanceInfo{name: serviceName, daemonAddr: daemonAddr, stateDir: configs.StateDir}
 	defaultStateDir := filepath.Join(os.Getenv("PROGRAMDATA"), "Netbird")
 
-	return checkInstanceInstall(self, envStateDir, defaultStateDir, installedInstances())
+	return checkInstanceInstall(self, envStateDir, defaultStateDir, installedInstances(), logFiles, defaultLogFile)
 }
