@@ -115,7 +115,24 @@ type registryConfigurator struct {
 	guid            string
 	routingAll      bool
 	gpo             bool
+	keyPrefix       string
 	origNameservers []netip.Addr
+}
+
+// nrptPrefix returns the prefix of the rule keys this instance owns.
+func (r *registryConfigurator) nrptPrefix() string {
+	if r.keyPrefix == "" {
+		return NRPTKeyPrefix
+	}
+	return r.keyPrefix
+}
+
+func (r *registryConfigurator) matchPath(root string) string {
+	return root + `\` + r.nrptPrefix() + "Match"
+}
+
+func (r *registryConfigurator) exemptLocalPath(root string) string {
+	return root + `\` + r.nrptPrefix() + "ExemptLocal"
 }
 
 func newHostManager(wgInterface WGIface) (*registryConfigurator, error) {
@@ -125,8 +142,12 @@ func newHostManager(wgInterface WGIface) (*registryConfigurator, error) {
 	}
 
 	configurator := &registryConfigurator{
-		guid: guid,
-		gpo:  useGPOPolicyStore(),
+		guid:      guid,
+		gpo:       useGPOPolicyStore(),
+		keyPrefix: instanceKeyPrefix(wgInterface.Name()),
+	}
+	if configurator.keyPrefix != "" {
+		log.Infof("interface %s is not the default one, NRPT rule keys start with %s", wgInterface.Name(), configurator.keyPrefix)
 	}
 
 	origNameservers, err := configurator.captureOriginalNameservers()
@@ -376,8 +397,9 @@ func (r *registryConfigurator) applyDNSConfig(config HostDNSConfig, stateManager
 
 func (r *registryConfigurator) updateState(stateManager *statemanager.Manager) {
 	if err := stateManager.UpdateState(&ShutdownState{
-		Guid: r.guid,
-		GPO:  r.gpo,
+		Guid:      r.guid,
+		GPO:       r.gpo,
+		KeyPrefix: r.keyPrefix,
 	}); err != nil {
 		log.Errorf("failed to update shutdown state: %s", err)
 	}
@@ -405,8 +427,8 @@ func (r *registryConfigurator) addDNSMatchPolicy(domains []string, ip netip.Addr
 		}
 		batchDomains := domains[i:end]
 
-		localPath := fmt.Sprintf("%s-%d", dnsPolicyConfigMatchPath, ruleIndex)
-		gpoPath := fmt.Sprintf("%s-%d", gpoDnsPolicyConfigMatchPath, ruleIndex)
+		localPath := fmt.Sprintf("%s-%d", r.matchPath(DNSPolicyConfigRoot), ruleIndex)
+		gpoPath := fmt.Sprintf("%s-%d", r.matchPath(GPODNSPolicyConfigRoot), ruleIndex)
 
 		if err := r.configureDNSPolicy(localPath, batchDomains, ip); err != nil {
 			return fmt.Errorf("configure DNS Local policy for rule %d: %w", ruleIndex, err)
@@ -442,12 +464,12 @@ func (r *registryConfigurator) addDNSMatchPolicy(domains []string, ip netip.Addr
 func (r *registryConfigurator) addDNSExemptLocalPolicy() error {
 	var noServers netip.Addr
 
-	if err := r.configureDNSPolicy(dnsPolicyConfigExemptLocalPath, []string{nrptLocalNamespace}, noServers); err != nil {
+	if err := r.configureDNSPolicy(r.exemptLocalPath(DNSPolicyConfigRoot), []string{nrptLocalNamespace}, noServers); err != nil {
 		return fmt.Errorf("configure exempt policy for %s: %w", nrptLocalNamespace, err)
 	}
 
 	if r.gpo {
-		if err := r.configureDNSPolicy(gpoDnsPolicyConfigExemptLocalPath, []string{nrptLocalNamespace}, noServers); err != nil {
+		if err := r.configureDNSPolicy(r.exemptLocalPath(GPODNSPolicyConfigRoot), []string{nrptLocalNamespace}, noServers); err != nil {
 			return fmt.Errorf("configure gpo exempt policy for %s: %w", nrptLocalNamespace, err)
 		}
 		if err := refreshGroupPolicy(); err != nil {
@@ -629,7 +651,7 @@ func (r *registryConfigurator) removeDNSMatchPolicies() error {
 	var merr *multierror.Error
 
 	for _, root := range []string{DNSPolicyConfigRoot, GPODNSPolicyConfigRoot} {
-		names, err := listNRPTRuleKeys(root)
+		names, err := listNRPTRuleKeysWithPrefix(root, r.nrptPrefix())
 		if err != nil {
 			merr = multierror.Append(merr, fmt.Errorf("list rule keys under %s: %w", root, err))
 			continue
@@ -725,6 +747,11 @@ func removeEmptyGPOPolicyStore() error {
 // root. An absent root holds nothing to clean up, which is the normal state of
 // the GPO store on a machine without DNS Client policy.
 func listNRPTRuleKeys(root string) ([]string, error) {
+	return listNRPTRuleKeysWithPrefix(root, NRPTKeyPrefix)
+}
+
+// listNRPTRuleKeysWithPrefix is listNRPTRuleKeys for the keys of one instance.
+func listNRPTRuleKeysWithPrefix(root, prefix string) ([]string, error) {
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, root, registry.ENUMERATE_SUB_KEYS)
 	switch {
 	case errors.Is(err, registry.ErrNotExist), errors.Is(err, syscall.ERROR_PATH_NOT_FOUND):
@@ -746,7 +773,7 @@ func listNRPTRuleKeys(root string) ([]string, error) {
 	var ruleKeys []string
 	for _, name := range names {
 		// registry key names are case insensitive
-		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(NRPTKeyPrefix)) {
+		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
 			ruleKeys = append(ruleKeys, name)
 		}
 	}

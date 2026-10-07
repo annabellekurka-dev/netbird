@@ -7,6 +7,9 @@ import (
 type ShutdownState struct {
 	Guid string
 	GPO  bool
+	// KeyPrefix is empty for the default instance, which keeps the state file
+	// of a default install unchanged.
+	KeyPrefix string `json:",omitempty"`
 }
 
 func (s *ShutdownState) Name() string {
@@ -15,8 +18,9 @@ func (s *ShutdownState) Name() string {
 
 func (s *ShutdownState) Cleanup() error {
 	manager := &registryConfigurator{
-		guid: s.Guid,
-		gpo:  s.GPO,
+		guid:      s.Guid,
+		gpo:       s.GPO,
+		keyPrefix: s.KeyPrefix,
 	}
 
 	if err := manager.restoreUncleanShutdownDNS(); err != nil {
