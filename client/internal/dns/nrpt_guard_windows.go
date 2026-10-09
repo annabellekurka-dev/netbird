@@ -19,14 +19,18 @@ type foreignInstance struct {
 }
 
 // dnsConflicts compares the namespaces this instance is about to claim with
-// those of the other instances. Taking the catch-all while another instance
-// has rules would send every name the other instance resolves through this
-// one, so it is an error; sharing a namespace, or nesting one in another, is
-// only worth a warning, since the more specific rule still wins.
+// those of the other instances. Windows picks the most specific rule, so one
+// instance may hold the catch-all while the others resolve their own domains.
+// Two catch-alls cannot both win, so that is an error; sharing a namespace, or
+// nesting one in another, is only worth a warning.
 func dnsConflicts(own []string, routeAll bool, others []foreignInstance) (warnings []string, err error) {
-	if routeAll && len(others) > 0 {
-		return nil, fmt.Errorf("a nameserver group for every domain (\".\") cannot be applied while another NetBird "+
-			"instance (%s) resolves its own domains: it would send all of that instance's names through this one", others[0].iface)
+	if routeAll {
+		for _, other := range others {
+			if hasCatchAll(other.namespaces) {
+				return nil, fmt.Errorf("a nameserver group for every domain (\".\") cannot be applied while another NetBird "+
+					"instance (%s) already holds the catch-all: only one instance can resolve every other name", other.iface)
+			}
+		}
 	}
 
 	for _, other := range others {
@@ -39,6 +43,22 @@ func dnsConflicts(own []string, routeAll bool, others []foreignInstance) (warnin
 		}
 	}
 	return warnings, nil
+}
+
+// hasCatchAll reports whether the namespaces include the catch-all.
+func hasCatchAll(namespaces []string) bool {
+	for _, ns := range namespaces {
+		if ns == nrptCatchAllNamespace {
+			return true
+		}
+	}
+	return false
+}
+
+// HasCatchAll reports whether the instance resolves every name that no more
+// specific rule claims.
+func (n NRPTInstance) HasCatchAll() bool {
+	return hasCatchAll(n.Namespaces)
 }
 
 // overlaps reports whether two namespaces are equal or one is inside the other.

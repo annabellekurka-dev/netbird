@@ -88,15 +88,24 @@ func TestInstanceReportWarnings(t *testing.T) {
 		assert.Len(t, r.warnings(), 1)
 	})
 
-	t.Run("catch-all while another instance is up", func(t *testing.T) {
+	t.Run("one catch-all next to specific domains is fine", func(t *testing.T) {
 		r := healthy
 		r.nrpt = []dns.NRPTInstance{
-			{Interface: "wt0", Namespaces: []string{"."}, Live: true},
+			{Interface: "wt0", Namespaces: []string{".work.bird", "."}, Live: true},
 			{Interface: "wt1", Namespaces: []string{".priv.bird"}, Live: true},
+		}
+		assert.Empty(t, r.warnings())
+	})
+
+	t.Run("two catch-alls", func(t *testing.T) {
+		r := healthy
+		r.nrpt = []dns.NRPTInstance{
+			{Interface: "wt0", Namespaces: []string{".work.bird", "."}, Live: true},
+			{Interface: "wt1", Namespaces: []string{".priv.bird", "."}, Live: true},
 		}
 		w := r.warnings()
 		assert.Len(t, w, 1)
-		assert.Contains(t, w[0], "every domain")
+		assert.Contains(t, w[0], "both resolve every domain")
 	})
 
 	t.Run("leftover rules of a dead instance are ignored", func(t *testing.T) {

@@ -219,22 +219,18 @@ func networksOverlap(a, b []string) bool {
 	return false
 }
 
+// overlapWarnings lists the DNS conflicts between two live instances. One
+// instance may hold the catch-all, since the most specific rule wins; two cannot.
 func overlapWarnings(a, b dns.NRPTInstance) []string {
 	var w []string
+	if a.HasCatchAll() && b.HasCatchAll() {
+		w = append(w, fmt.Sprintf("instances %s and %s both resolve every domain (.): only one of them can", a.Interface, b.Interface))
+	}
 	for _, x := range a.Namespaces {
-		if x == "." {
-			w = append(w, fmt.Sprintf("instance %s resolves every domain (.) while instance %s is up", a.Interface, b.Interface))
-			continue
-		}
 		for _, y := range b.Namespaces {
-			if y != "." && dns.NamespacesOverlap(x, y) {
+			if x != "." && y != "." && dns.NamespacesOverlap(x, y) {
 				w = append(w, fmt.Sprintf("DNS domain %s of %s overlaps %s of %s", x, a.Interface, y, b.Interface))
 			}
-		}
-	}
-	for _, y := range b.Namespaces {
-		if y == "." {
-			w = append(w, fmt.Sprintf("instance %s resolves every domain (.) while instance %s is up", b.Interface, a.Interface))
 		}
 	}
 	return w
