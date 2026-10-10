@@ -1,0 +1,120 @@
+name: SMS release
+
+# Builds the Windows client of this fork and publishes it as a GitHub release.
+# Started by hand: Actions tab > "SMS release" > Run workflow.
+#
+# The release tag is v<upstream version>-SMS.<revision>, e.g. v0.80.0-SMS.1. It must not be
+# the bare upstream tag v<upstream version>: that name is NetBird's, and is not our code.
+# The release is created with the workflow token on purpose: GitHub does not start other
+# workflows from events caused that way, so NetBird's own tag workflows never fire on it.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "NetBird version this branch is based on, e.g. 0.80.0 (three numbers)"
+        required: true
+        type: string
+      revision:
+        description: "Build number of the fork for that version (1, 2, ...)"
+        required: true
+        default: "1"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sms-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ inputs.version }}
+      REVISION: ${{ inputs.revision }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check the inputs
+        run: |
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') { throw "version '$env:VERSION' must be three numbers like 0.80.0" }
+          if ($env:REVISION -notmatch '^[1-9]\d{0,2}$') { throw "revision '$env:REVISION' must be a number like 1" }
+          "TAG=v$env:VERSION-SMS.$env:REVISION" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Check out
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Stop if this release already exists
+        run: |
+          gh release view "$env:TAG" --repo "$env:GITHUB_REPOSITORY" 2>$null
+          if ($LASTEXITCODE -eq 0) { throw "release $env:TAG already exists: raise the revision" }
+          $global:LASTEXITCODE = 0
+
+      - name: Fetch the NetBird release this branch is based on
+        run: git fetch --no-tags https://github.com/netbirdio/netbird.git "+refs/tags/v${env:VERSION}:refs/tags/v${env:VERSION}"
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11
+
+      # Same rule as NetBird's release: the CLI version comes from go.mod, so the bindings
+      # always match the runtime the UI is linked against.
+      - name: Install the wails3 CLI
+        run: |
+          $v = go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3
+          go install "github.com/wailsapp/wails/v3/cmd/wails3@$v"
+          Add-Content $env:GITHUB_PATH (Join-Path (go env GOPATH) 'bin')
+
+      - name: Test
+        run: ./sms/test-windows.ps1 -Base "v$env:VERSION"
+
+      - name: Build
+        run: ./sms/build-windows.ps1 -Version $env:VERSION
+
+      - name: Package
+        run: |
+          $out = 'dist/sms'
+          $zip = "netbird-sms_${env:VERSION}-SMS.${env:REVISION}_windows_amd64.zip"
+          Copy-Item sms/MANUAL.md "$out/MANUAL.md"
+          Compress-Archive -Path "$out/netbird.exe", "$out/netbird-ui.exe", "$out/netbird-ui-console.exe", "$out/SHA256SUMS", "$out/MANUAL.md" -DestinationPath "dist/$zip"
+          $hash = (Get-FileHash "dist/$zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Set-Content "dist/$zip.sha256" -Encoding ascii
+          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          @"
+          NetBird $env:VERSION with the SMS multi-instance changes, for Windows (64-bit).
+
+          Version string in the programs: ``$env:VERSION+SMS``. Unsigned: Windows may warn.
+
+          Contents of the zip: ``netbird.exe`` (daemon and command line), ``netbird-ui.exe`` (tray),
+          ``netbird-ui-console.exe`` (the same tray with a console, for reading its log),
+          ``SHA256SUMS`` and ``MANUAL.md`` (how to install and add a second network).
+
+          Checksum of the zip: ``$hash``
+
+          Install: follow MANUAL.md, step 1. The client shows NetBird's usual "new version available"
+          notice when a newer release of this fork is published; it never downloads anything itself.
+          "@ | Set-Content dist/notes.md -Encoding utf8
+
+      - name: Publish the release
+        run: |
+          gh release create "$env:TAG" "dist/$env:ZIP" "dist/$env:ZIP.sha256" `
+            --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" `
+            --title "NetBird $env:VERSION+SMS (build $env:REVISION)" --notes-file dist/notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'creating the release failed' }

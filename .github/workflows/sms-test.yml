@@ -1,0 +1,41 @@
+name: SMS tests
+
+# Runs the tests of the multi-instance changes (see sms/test-windows.ps1) on every push to
+# the fork's branch, and on demand. NetBird's own workflows are for NetBird's repository
+# and are not started by this branch.
+on:
+  push:
+    branches:
+      - multi-instance
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sms-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The fork does not carry NetBird's release tags; the tests need the one this branch is based on.
+      - name: Fetch NetBird's release tags
+        run: git fetch --no-tags https://github.com/netbirdio/netbird.git "+refs/tags/v*:refs/tags/v*"
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Test
+        run: ./sms/test-windows.ps1
