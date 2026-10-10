@@ -92,7 +92,8 @@ jobs:
           $out = 'dist/sms'
           $zip = "netbird-sms_${env:VERSION}-SMS.${env:REVISION}_windows_amd64.zip"
           Copy-Item sms/MANUAL.md "$out/MANUAL.md"
-          Compress-Archive -Path "$out/netbird.exe", "$out/netbird-ui.exe", "$out/netbird-ui-console.exe", "$out/SHA256SUMS", "$out/MANUAL.md" -DestinationPath "dist/$zip"
+          Copy-Item sms/update-windows.ps1 "$out/update-windows.ps1"
+          Compress-Archive -Path "$out/netbird.exe", "$out/netbird-ui.exe", "$out/netbird-ui-console.exe", "$out/SHA256SUMS", "$out/MANUAL.md", "$out/update-windows.ps1" -DestinationPath "dist/$zip"
           $hash = (Get-FileHash "dist/$zip" -Algorithm SHA256).Hash.ToLower()
           "$hash  $zip" | Set-Content "dist/$zip.sha256" -Encoding ascii
           "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -104,11 +105,13 @@ jobs:
 
           Contents of the zip: ``netbird.exe`` (daemon and command line), ``netbird-ui.exe`` (tray),
           ``netbird-ui-console.exe`` (the same tray with a console, for reading its log),
-          ``SHA256SUMS`` and ``MANUAL.md`` (how to install and add a second network).
+          ``SHA256SUMS``, ``MANUAL.md`` (how to install and add a second network) and
+          ``update-windows.ps1`` (installs a new release over an existing one, safely).
 
           Checksum of the zip: ``$hash``
 
-          Install: follow MANUAL.md, step 1. The client shows NetBird's usual "new version available"
+          Install or update: extract the zip and run ``update-windows.ps1`` in an administrator
+          PowerShell (see MANUAL.md). The client shows NetBird's usual "new version available"
           notice when a newer release of this fork is published; it never downloads anything itself.
           "@ | Set-Content dist/notes.md -Encoding utf8
 

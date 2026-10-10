@@ -15,18 +15,33 @@ Use an administrator PowerShell for everything below.
 
 ## 1. Put the build on the machine
 
-Needs `netbird.exe` and `netbird-ui.exe` from this bundle, and NetBird already installed (it supplies `wintun.dll`). Check the files against `SHA256SUMS` first.
+NetBird must already be installed (it supplies `wintun.dll`). The same script installs the first time and every later update; it works for every NetBird service on the machine, the default one and any extra network.
+
+Get the release (the zip on `github.com/annabellekurka-dev/netbird/releases/latest`), extract it, and in an **administrator PowerShell** run the script from the extracted folder:
 
 ```powershell
-cd 'C:\Program Files\Netbird'
-Stop-Service Netbird; Get-Process netbird-ui -ErrorAction SilentlyContinue | Stop-Process
-Copy-Item netbird.exe netbird.exe.orig; Copy-Item netbird-ui.exe netbird-ui.exe.orig
-Copy-Item <bundle>\netbird.exe . -Force; Copy-Item <bundle>\netbird-ui.exe . -Force
-Start-Service Netbird; Start-Process .\netbird-ui.exe
-.\netbird.exe status
+.\update-windows.ps1 -DryRun
+.\update-windows.ps1
 ```
 
-The default network should come back with the same IP and connection. Its interface must be `wt0` (`Get-NetIPAddress -IPAddress <your NetBird IP> | Select InterfaceAlias`). An MSI repair would put the official files back.
+`-DryRun` shows the plan and changes nothing. Without it the script asks for a yes, then:
+
+1. checks the new files against `SHA256SUMS` (nothing is touched if they do not match),
+2. stops every NetBird service and tray,
+3. keeps the old programs in `<install folder>\backup\<date>-<old version>` (the newest three are kept),
+4. copies the new programs, starts the services, and checks that every daemon answers,
+5. **puts the old programs back by itself if anything went wrong**,
+6. starts the trays again as the normal user (trays of extra networks need their Startup shortcut, see step 5 below).
+
+To skip the manual download, run the script from anywhere with `-FromGitHub`: it fetches the latest release itself, checks it against its published checksum, and installs it.
+
+```powershell
+.\update-windows.ps1 -FromGitHub
+```
+
+Other options: `-Source <folder>` (files from another folder), `-Yes` (no question), `-NoTray`, `-Force` (install even if identical), `-InstallDir <folder>`. The default network should come back with the same IP and connection; its interface must be `wt0` (`Get-NetIPAddress -IPAddress <your NetBird IP> | Select InterfaceAlias`). An MSI repair would put the official files back.
+
+The script is only started by you. Nothing updates by itself.
 
 ## 2. Add an extra network (one command)
 
@@ -110,7 +125,7 @@ $s = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:APPDATA\Microsof
 
 ## 6. New versions
 
-The client checks the releases of this fork on GitHub every 30 minutes and shows NetBird's usual "new version available" notice when a newer one exists. Its button opens the fork's releases page. Nothing is downloaded or installed automatically. To update: replace the exe files as in step 1 (stop all NetBird services first). Automatic update inside NetBird stays off on purpose, so the official files cannot overwrite these.
+The client checks the releases of this fork on GitHub every 30 minutes and shows NetBird's usual "new version available" notice when a newer one exists. Its button opens the fork's releases page. Nothing is downloaded or installed automatically. To update, run `update-windows.ps1` as in step 1 (`-FromGitHub` fetches the latest release for you). Automatic update inside NetBird stays off on purpose, so the official files cannot overwrite these.
 
 ## 7. Building a release
 

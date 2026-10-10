@@ -77,4 +77,9 @@ foreach ($group in ($added | Group-Object { [IO.Path]::GetDirectoryName($_) })) 
     if ($LASTEXITCODE -ne 0) { throw "tests failed in $($group.Name)" }
 }
 
+# 3. the helper functions of the update script
+Write-Host 'test sms\update-windows.ps1'
+& (Join-Path $PSScriptRoot 'update-windows.tests.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'the tests of update-windows.ps1 failed' }
+
 Write-Host "All good: $total tests in $(@($added).Count) files, $(@($vetDirs).Count) packages vetted."
