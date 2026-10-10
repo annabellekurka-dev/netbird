@@ -1,5 +1,5 @@
 package version
 
 const (
-	downloadURL = "https://app.netbird.io/install"
+	downloadURL = smsReleasesPage
 )

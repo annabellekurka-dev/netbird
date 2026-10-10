@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	versionURL = "https://pkgs.netbird.io/releases/latest/version"
+	versionURL = smsVersionURL
 )
 
 // Update fetch the version info periodically and notify the onUpdateListener in case the UI version or the
@@ -139,6 +139,7 @@ func (u *Update) fetchVersion() bool {
 	}
 
 	req.Header.Set("User-Agent", u.httpAgent)
+	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -147,12 +148,16 @@ func (u *Update) fetchVersion() bool {
 	}
 	defer resp.Body.Close()
 
+	if smsNoRelease(resp) {
+		return false
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		log.Errorf("invalid status code: %d", resp.StatusCode)
 		return false
 	}
 
-	if resp.ContentLength > 100 {
+	if resp.ContentLength > maxVersionResponse {
 		log.Errorf("too large response: %d", resp.ContentLength)
 		return false
 	}
@@ -163,7 +168,7 @@ func (u *Update) fetchVersion() bool {
 		return false
 	}
 
-	latestAvailable, err := goversion.NewVersion(string(content))
+	latestAvailable, err := goversion.NewVersion(smsVersionFromBody(content))
 	if err != nil {
 		log.Errorf("failed to parse the version string: %s", err)
 		return false
