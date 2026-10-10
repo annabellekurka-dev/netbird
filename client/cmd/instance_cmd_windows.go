@@ -126,7 +126,7 @@ func runInstanceAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(out, "\nDone. Network %q is up on %s.\n", plan.Name, plan.Interface)
-	fmt.Fprintf(out, "Start its tray now with:\n  \"%s\" --daemon-addr %s\n", uiExePath(exe), plan.daemonAddr())
+	fmt.Fprintf(out, "Start its tray now with:\n  & \"%s\" %s\n", uiExePath(exe), plan.trayArguments())
 	fmt.Fprintf(out, "Check everything with:\n  netbird instances\n")
 	fmt.Fprintf(out, "Commands for this network need:  --daemon-addr %s  and  $env:NB_STATE_DIR = '%s'\n", plan.daemonAddr(), plan.StateDir)
 	return nil

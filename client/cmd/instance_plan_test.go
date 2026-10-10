@@ -139,7 +139,15 @@ func TestAddStepsWithSetupKey(t *testing.T) {
 
 	assert.Equal(t, stepShortcut, steps[4].Kind)
 	assert.Equal(t, `C:\Startup\NetBird (private).lnk`, steps[4].Link)
-	assert.Equal(t, "--daemon-addr npipe://netbird-private", steps[4].Arguments)
+	assert.Equal(t, "--daemon-addr npipe://netbird-private --badge 1", steps[4].Arguments, "the badge number is the interface number")
+}
+
+func TestTrayArguments(t *testing.T) {
+	p := instancePlan{Pipe: "netbird-x", Interface: "wt3"}
+	assert.Equal(t, "--daemon-addr npipe://netbird-x --badge 3", p.trayArguments())
+
+	p.Interface = "wtlab"
+	assert.Equal(t, "--daemon-addr npipe://netbird-x", p.trayArguments(), "no number, no badge argument")
 }
 
 func TestAddStepsWithProfile(t *testing.T) {

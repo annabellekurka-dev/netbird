@@ -64,6 +64,16 @@ func (p instancePlan) daemonAddr() string { return "npipe://" + p.Pipe }
 
 func (p instancePlan) env() []string { return []string{"NB_STATE_DIR=" + p.StateDir} }
 
+// trayArguments are the arguments of the instance's tray. The badge number is the
+// number of the interface (wt1 is 1), so each tray gets a dot of its own colour.
+func (p instancePlan) trayArguments() string {
+	args := "--daemon-addr " + p.daemonAddr()
+	if n, err := strconv.Atoi(strings.TrimPrefix(p.Interface, "wt")); err == nil && n > 0 {
+		args += " --badge " + strconv.Itoa(n)
+	}
+	return args
+}
+
 // deriveInstance returns the service, pipe and folders for an instance name. It
 // leaves the interface and port empty: those depend on what else is running.
 func deriveInstance(name, programData string) (instancePlan, error) {
@@ -229,7 +239,7 @@ func addSteps(p instancePlan, o addOptions, profileSource string, sc shortcutEnv
 		steps = append(steps, planStep{
 			Kind: stepShortcut,
 			Desc: "add the tray to the startup folder",
-			Link: sc.link(p.Name), Target: sc.UIExe, Arguments: "--daemon-addr " + p.daemonAddr(),
+			Link: sc.link(p.Name), Target: sc.UIExe, Arguments: p.trayArguments(),
 		})
 	}
 	return steps
