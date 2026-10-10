@@ -146,6 +146,7 @@ func (t *Tray) fillProfileSubmenu() {
 	log.Infof("tray fillProfileSubmenu: %d profile(s) for user %q, active=%q", len(profiles), username, activeName)
 	if t.profileSubmenuItem != nil && activeName != "" {
 		t.profileSubmenuItem.SetLabel(activeName)
+		t.noteActiveProfile(activeName)
 	}
 	if t.profileEmailItem != nil {
 		if activeEmail != "" {

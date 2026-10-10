@@ -194,6 +194,7 @@ func main() {
 		Preferences:     prefStore,
 	})
 	listenForShowSignal(context.Background(), tray)
+	go tray.pollInstanceState(context.Background())
 
 	// Start the feed only after every service's ServiceStartup has run. The
 	// first SubscribeEvents message replays cached state synchronously and can

@@ -25,6 +25,7 @@ func (t *Tray) applyIcon() {
 		connected, hasUpdate, statusLabel, runtime.GOOS)
 
 	icon, dark := t.iconForState()
+	icon, dark = badgeForInstance(icon, dark)
 	if runtime.GOOS == "darwin" {
 		t.tray.SetTemplateIcon(icon)
 		return

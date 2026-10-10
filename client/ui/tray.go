@@ -180,7 +180,7 @@ func NewTray(app *application.App, window *application.WebviewWindow, svc TraySe
 	// matches the panel's light/dark scheme (Linux only).
 	t.startTrayTheme()
 	t.applyIcon()
-	t.tray.SetTooltip(withInstanceLabel(t.loc.T("tray.tooltip"), flagInstanceSuffix()))
+	t.updateTooltip()
 	// On Linux the SNI hover tooltip rides on the systray label, not
 	// SetTooltip (a no-op there); without a label Wails shows the literal
 	// "Wails". macOS/Windows are skipped (label paints visible text on
@@ -298,7 +298,7 @@ func (t *Tray) showMainAndEmit(event string) {
 // calling them from the Localizer's background goroutine is safe; profileLoadMu
 // prevents loadProfiles from racing the rebuild.
 func (t *Tray) applyLanguage() {
-	t.tray.SetTooltip(withInstanceLabel(t.loc.T("tray.tooltip"), flagInstanceSuffix()))
+	t.updateTooltip()
 	// Mirror the Linux label fix from NewTray (the SNI tooltip rides on the
 	// label).
 	if runtime.GOOS == "linux" {
